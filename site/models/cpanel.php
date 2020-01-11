@@ -2,12 +2,13 @@
 /**
  * @package    Joomla.Members.Manager
  *
- * @created    6th September, 2015
+ * @created    6th July, 2018
  * @author     Llewellyn van der Merwe <https://www.joomlacomponentbuilder.com/>
  * @github     Joomla Members Manager <https://github.com/vdm-io/Joomla-Members-Manager>
  * @copyright  Copyright (C) 2015. All Rights Reserved
  * @license    GNU/GPL Version 2 or later - http://www.gnu.org/licenses/gpl-2.0.html
  */
+
 
 // No direct access to this file
 defined('_JEXEC') or die('Restricted access');
@@ -162,7 +163,7 @@ class MembersmanagerModelCpanel extends JModelItem
 		else
 		{
 			$id = (int) $this->userId;
-		}			
+		}
 		// set the id and view name to session
 		if ($vdm = MembersmanagerHelper::get('user__'.$id))
 		{

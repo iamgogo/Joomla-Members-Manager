@@ -2,12 +2,13 @@
 /**
  * @package    Joomla.Members.Manager
  *
- * @created    6th September, 2015
+ * @created    6th July, 2018
  * @author     Llewellyn van der Merwe <https://www.joomlacomponentbuilder.com/>
  * @github     Joomla Members Manager <https://github.com/vdm-io/Joomla-Members-Manager>
  * @copyright  Copyright (C) 2015. All Rights Reserved
  * @license    GNU/GPL Version 2 or later - http://www.gnu.org/licenses/gpl-2.0.html
  */
+
 
 // No direct access to this file
 defined('_JEXEC') or die('Restricted access');
@@ -37,6 +38,8 @@ class MembersmanagerViewTypes extends JViewLegacy
 		$this->listOrder = $this->escape($this->state->get('list.ordering'));
 		$this->listDirn = $this->escape($this->state->get('list.direction'));
 		$this->saveOrder = $this->listOrder == 'ordering';
+		// set the return here value
+		$this->return_here = urlencode(base64_encode((string) JUri::getInstance()));
 		// get global action permissions
 		$this->canDo = MembersmanagerHelper::getActions('type');
 		$this->canEdit = $this->canDo->get('type.edit');
@@ -132,6 +135,11 @@ class MembersmanagerViewTypes extends JViewLegacy
 				JToolBarHelper::custom('types.exportData', 'download', '', 'COM_MEMBERSMANAGER_EXPORT_DATA', true);
 			}
 		}
+		if ($this->user->authorise('type.update_types', 'com_membersmanager'))
+		{
+			// add Update Types button.
+			JToolBarHelper::custom('types.updateTypes', 'wrench', '', 'COM_MEMBERSMANAGER_UPDATE_TYPES', false);
+		}
 
 		if ($this->canDo->get('core.import') && $this->canDo->get('type.import'))
 		{
@@ -183,6 +191,36 @@ class MembersmanagerViewTypes extends JViewLegacy
 				JHtml::_('select.options', JHtml::_('access.assetgroups'), 'value', 'text')
 			);
 		}
+
+		// Set Add Relationship Selection
+		$this->add_relationshipOptions = $this->getTheAdd_relationshipSelections();
+		// We do some sanitation for Add Relationship filter
+		if (MembersmanagerHelper::checkArray($this->add_relationshipOptions) &&
+			isset($this->add_relationshipOptions[0]->value) &&
+			!MembersmanagerHelper::checkString($this->add_relationshipOptions[0]->value))
+		{
+			unset($this->add_relationshipOptions[0]);
+		}
+		// Only load Add Relationship filter if it has values
+		if (MembersmanagerHelper::checkArray($this->add_relationshipOptions))
+		{
+			// Add Relationship Filter
+			JHtmlSidebar::addFilter(
+				'- Select '.JText::_('COM_MEMBERSMANAGER_TYPE_ADD_RELATIONSHIP_LABEL').' -',
+				'filter_add_relationship',
+				JHtml::_('select.options', $this->add_relationshipOptions, 'value', 'text', $this->state->get('filter.add_relationship'))
+			);
+
+			if ($this->canBatch && $this->canCreate && $this->canEdit)
+			{
+				// Add Relationship Batch Selection
+				JHtmlBatch_::addListSelection(
+					'- Keep Original '.JText::_('COM_MEMBERSMANAGER_TYPE_ADD_RELATIONSHIP_LABEL').' -',
+					'batch[add_relationship]',
+					JHtml::_('select.options', $this->add_relationshipOptions, 'value', 'text')
+				);
+			}
+		}
 	}
 
 	/**
@@ -231,5 +269,41 @@ class MembersmanagerViewTypes extends JViewLegacy
 			'a.name' => JText::_('COM_MEMBERSMANAGER_TYPE_NAME_LABEL'),
 			'a.id' => JText::_('JGRID_HEADING_ID')
 		);
+	}
+
+	protected function getTheAdd_relationshipSelections()
+	{
+		// Get a db connection.
+		$db = JFactory::getDbo();
+
+		// Create a new query object.
+		$query = $db->getQuery(true);
+
+		// Select the text.
+		$query->select($db->quoteName('add_relationship'));
+		$query->from($db->quoteName('#__membersmanager_type'));
+		$query->order($db->quoteName('add_relationship') . ' ASC');
+
+		// Reset the query using our newly populated query object.
+		$db->setQuery($query);
+
+		$results = $db->loadColumn();
+
+		if ($results)
+		{
+			// get model
+			$model = $this->getModel();
+			$results = array_unique($results);
+			$_filter = array();
+			foreach ($results as $add_relationship)
+			{
+				// Translate the add_relationship selection
+				$text = $model->selectionTranslation($add_relationship,'add_relationship');
+				// Now add the add_relationship and its text to the options array
+				$_filter[] = JHtml::_('select.option', $add_relationship, JText::_($text));
+			}
+			return $_filter;
+		}
+		return false;
 	}
 }

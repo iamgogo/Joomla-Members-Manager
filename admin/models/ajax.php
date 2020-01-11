@@ -2,12 +2,13 @@
 /**
  * @package    Joomla.Members.Manager
  *
- * @created    6th September, 2015
+ * @created    6th July, 2018
  * @author     Llewellyn van der Merwe <https://www.joomlacomponentbuilder.com/>
  * @github     Joomla Members Manager <https://github.com/vdm-io/Joomla-Members-Manager>
  * @copyright  Copyright (C) 2015. All Rights Reserved
  * @license    GNU/GPL Version 2 or later - http://www.gnu.org/licenses/gpl-2.0.html
  */
+
 
 // No direct access to this file
 defined('_JEXEC') or die('Restricted access');
@@ -55,6 +56,49 @@ class MembersmanagerModelAjax extends JModelList
 				'username' => $user->username,
 				'useremail' => $user->email
 				);
+		}
+		return false;
+	}
+
+	// get placeholder header if available
+	public function getPlaceHolderHeaders($component)
+	{
+		if ('com_membersmanager' === $component || 'com_corecomponent' === $component)
+		{
+			// just return the core placeholders
+			return JText::_('COM_MEMBERSMANAGER_CORE_PLACEHOLDERS');
+		}
+		return MembersmanagerHelper::getComponentName($component);
+	}
+
+	// get chart image link
+	public function getChartImageLink($image)
+	{
+		$view = $this->getViewID();
+		// make sure we are in the (allowed) view
+		if (isset($view['a_view']) && ($view['a_view'] === 'compose' || $view['a_view'] === 'profile'))
+		{
+			// build image name
+			$imageName =  md5($image . 'jnst_f0r_dumm!es');
+			// build image data
+			$image =  explode('base64,', $image); unset($image[0]); $image = str_replace(' ', '+', implode('', $image));
+			// validate Base64
+			if (($image = MembersmanagerHelper::openValidBase64($image, null, false)) !== false)
+			{
+				// validate just png (for now)
+				$png_binary_check = "\x89\x50\x4e\x47\x0d\x0a\x1a\x0a";
+				if (substr($image, 0, strlen($png_binary_check)) === $png_binary_check)
+				{
+					// build image path
+					$imagepath = MembersmanagerHelper::getFolderPath('path', 'chartpath') . $imageName . '.png';
+					// now write the file if not exists
+					if (file_exists($imagepath) || MembersmanagerHelper::writeFile($imagepath, $image))
+					{
+						// build and return image link
+						return array('link' => MembersmanagerHelper::getFolderPath('url', 'chartpath') . $imageName . '.png');
+					}
+				}
+			}
 		}
 		return false;
 	}
@@ -163,7 +207,7 @@ class MembersmanagerModelAjax extends JModelList
 			{
 				MembersmanagerHelper::resizeImage($this->fileName, $this->fileFormat, $this->target, $this->folderPath, $this->fullPath);
 			}
-			// Get the basic encription.
+			// Get the basic encryption.
 			$basickey = MembersmanagerHelper::getCryptKey('basic');
 			$basic = null;
 			// set link options
@@ -396,8 +440,8 @@ class MembersmanagerModelAjax extends JModelList
 	protected function _getPackageFromUpload()
 	{		
 		// Get the uploaded file information
-		$app	= JFactory::getApplication();
-		$input	= $app->input;
+		$app = JFactory::getApplication();
+		$input = $app->input;
 
 		// See JInputFiles::get.
 		$userfiles = $input->files->get('files', null, 'array');
@@ -431,9 +475,9 @@ class MembersmanagerModelAjax extends JModelList
 		}
 
 		// Build the appropriate paths
-		$config		= JFactory::getConfig();
-		$tmp_dest	= $config->get('tmp_path') . '/' . $userfile['name'];
-		$tmp_src	= $userfile['tmp_name'];
+		$config = JFactory::getConfig();
+		$tmp_dest = $config->get('tmp_path') . '/' . $userfile['name'];
+		$tmp_src = $userfile['tmp_name'];
 
 		// Move uploaded file
 		jimport('joomla.filesystem.file');
@@ -503,12 +547,12 @@ class MembersmanagerModelAjax extends JModelList
 			}
 		}
 		
-		$config			= JFactory::getConfig();
+		$config = JFactory::getConfig();
 		// set Package Name
-		$check['packagename']	= $archivename;
+		$check['packagename'] = $archivename;
 		
 		// set directory
-		$check['dir']		= $config->get('tmp_path'). '/' .$archivename;
+		$check['dir'] = $config->get('tmp_path'). '/' .$archivename;
 		
 		return $check;
 	}
@@ -525,8 +569,8 @@ class MembersmanagerModelAjax extends JModelList
 	{
 		jimport('joomla.filesystem.file');
 		
-		$config		= JFactory::getConfig();
-		$package	= $config->get('tmp_path'). '/' .$package;
+		$config = JFactory::getConfig();
+		$package = $config->get('tmp_path'). '/' .$package;
 
 		// Is the package file a valid file?
 		if (is_file($package))
@@ -605,13 +649,77 @@ class MembersmanagerModelAjax extends JModelList
 	}
 
 
+	/**
+	 * get any placeholder
+	 *
+	 * @param   string  $getType    Name get type
+	 *
+	 * @return  string  The html string of placeholders
+	 *
+	 */
+	public function getAnyPlaceHolders($getType)
+	{
+		// check if we should add a header
+		if (method_exists(__CLASS__, 'getPlaceHolderHeaders') && ($string = $this->getPlaceHolderHeaders($getType)) !== false)
+		{
+			$string = JText::_($string) . ' ';
+			$header = '<h4>' . $string . '</h4>';
+		}
+		else
+		{
+			$string = '';
+			$header = '';
+		}
+		// get the core component helper class & get placeholders
+		if (($helperClass = MembersmanagerHelper::getHelperClass('membersmanager')) !== false &&  ($placeholders = $helperClass::getAnyPlaceHolders($getType)) !== false)
+		{
+			return '<div>' . $header . '<code style="display: inline-block; padding: 2px; margin: 3px;">' .
+				implode('</code> <code style="display: inline-block; padding: 2px; margin: 3px;">', $placeholders) .
+				'</code></div>';
+		}
+		// not found
+		return '<div class="alert alert-error"><h4 class="alert-heading">' .
+			$string . JText::_('COM_MEMBERSMANAGER_PLACEHOLDERS_NOT_FOUND') .
+			'!</h4><div class="alert-message">' .
+			JText::_('COM_MEMBERSMANAGER_THERE_WAS_AN_ERROR_PLEASE_TRY_AGAIN_LATER_IF_THIS_ERROR_CONTINUES_CONTACT_YOUR_SYSTEM_ADMINISTRATOR') .
+			'</div></div>';
+	}
+
+
+	/**
+	 * get the placeholder
+	 *
+	 * @param   string  $getType    Name get type
+	 *
+	 * @return  string  The html string of placeholders
+	 *
+	 */
 	public function getPlaceHolders($getType)
 	{
+		// check if we should add a header
+		if (method_exists(__CLASS__, 'getPlaceHolderHeaders') && ($string = $this->getPlaceHolderHeaders($getType)) !== false)
+		{
+			$string = JText::_($string) . ' ';
+			$header = '<h4>' . $string . '</h4>';
+		}
+		else
+		{
+			$string = '';
+			$header = '';
+		}
+		// get placeholders
 		if ($placeholders = MembersmanagerHelper::getPlaceHolders($getType))
 		{
-			return '<code style="display: inline-block; padding: 2px; margin: 3px;">'. implode('</code> <code style="display: inline-block; padding: 2px; margin: 3px;">', $placeholders).'</code>';
+			return '<div>' . $header . '<code style="display: inline-block; padding: 2px; margin: 3px;">' .
+				implode('</code> <code style="display: inline-block; padding: 2px; margin: 3px;">', $placeholders) .
+				'</code></div>';
 		}
-		return JText::_('COM_MEMBERSMANAGER_NO_PLACEHOLDERS_WERE_FOUND_PLEASE_TRY_AGAIN_LATER');
+		// not found
+		return '<div class="alert alert-error"><h4 class="alert-heading">' .
+			$string . JText::_('COM_MEMBERSMANAGER_PLACEHOLDERS_NOT_FOUND') .
+			'!</h4><div class="alert-message">' .
+			JText::_('COM_MEMBERSMANAGER_THERE_WAS_AN_ERROR_PLEASE_TRY_AGAIN_LATER_IF_THIS_ERROR_CONTINUES_CONTACT_YOUR_SYSTEM_ADMINISTRATOR') .
+			'</div></div>';
 	}
 
 }

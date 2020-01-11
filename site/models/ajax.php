@@ -2,12 +2,13 @@
 /**
  * @package    Joomla.Members.Manager
  *
- * @created    6th September, 2015
+ * @created    6th July, 2018
  * @author     Llewellyn van der Merwe <https://www.joomlacomponentbuilder.com/>
  * @github     Joomla Members Manager <https://github.com/vdm-io/Joomla-Members-Manager>
  * @copyright  Copyright (C) 2015. All Rights Reserved
  * @license    GNU/GPL Version 2 or later - http://www.gnu.org/licenses/gpl-2.0.html
  */
+
 
 // No direct access to this file
 defined('_JEXEC') or die('Restricted access');
@@ -57,6 +58,49 @@ class MembersmanagerModelAjax extends JModelList
 				'username' => $user->username,
 				'useremail' => $user->email
 				);
+		}
+		return false;
+	}
+
+	// get placeholder header if available
+	public function getPlaceHolderHeaders($component)
+	{
+		if ('com_membersmanager' === $component || 'com_corecomponent' === $component)
+		{
+			// just return the core placeholders
+			return JText::_('COM_MEMBERSMANAGER_CORE_PLACEHOLDERS');
+		}
+		return MembersmanagerHelper::getComponentName($component);
+	}
+
+	// get chart image link
+	public function getChartImageLink($image)
+	{
+		$view = $this->getViewID();
+		// make sure we are in the (allowed) view
+		if (isset($view['a_view']) && ($view['a_view'] === 'compose' || $view['a_view'] === 'profile'))
+		{
+			// build image name
+			$imageName =  md5($image . 'jnst_f0r_dumm!es');
+			// build image data
+			$image =  explode('base64,', $image); unset($image[0]); $image = str_replace(' ', '+', implode('', $image));
+			// validate Base64
+			if (($image = MembersmanagerHelper::openValidBase64($image, null, false)) !== false)
+			{
+				// validate just png (for now)
+				$png_binary_check = "\x89\x50\x4e\x47\x0d\x0a\x1a\x0a";
+				if (substr($image, 0, strlen($png_binary_check)) === $png_binary_check)
+				{
+					// build image path
+					$imagepath = MembersmanagerHelper::getFolderPath('path', 'chartpath') . $imageName . '.png';
+					// now write the file if not exists
+					if (file_exists($imagepath) || MembersmanagerHelper::writeFile($imagepath, $image))
+					{
+						// build and return image link
+						return array('link' => MembersmanagerHelper::getFolderPath('url', 'chartpath') . $imageName . '.png');
+					}
+				}
+			}
 		}
 		return false;
 	}
@@ -165,7 +209,7 @@ class MembersmanagerModelAjax extends JModelList
 			{
 				MembersmanagerHelper::resizeImage($this->fileName, $this->fileFormat, $this->target, $this->folderPath, $this->fullPath);
 			}
-			// Get the basic encription.
+			// Get the basic encryption.
 			$basickey = MembersmanagerHelper::getCryptKey('basic');
 			$basic = null;
 			// set link options
@@ -398,8 +442,8 @@ class MembersmanagerModelAjax extends JModelList
 	protected function _getPackageFromUpload()
 	{		
 		// Get the uploaded file information
-		$app	= JFactory::getApplication();
-		$input	= $app->input;
+		$app = JFactory::getApplication();
+		$input = $app->input;
 
 		// See JInputFiles::get.
 		$userfiles = $input->files->get('files', null, 'array');
@@ -433,9 +477,9 @@ class MembersmanagerModelAjax extends JModelList
 		}
 
 		// Build the appropriate paths
-		$config		= JFactory::getConfig();
-		$tmp_dest	= $config->get('tmp_path') . '/' . $userfile['name'];
-		$tmp_src	= $userfile['tmp_name'];
+		$config = JFactory::getConfig();
+		$tmp_dest = $config->get('tmp_path') . '/' . $userfile['name'];
+		$tmp_src = $userfile['tmp_name'];
 
 		// Move uploaded file
 		jimport('joomla.filesystem.file');
@@ -505,12 +549,12 @@ class MembersmanagerModelAjax extends JModelList
 			}
 		}
 		
-		$config			= JFactory::getConfig();
+		$config = JFactory::getConfig();
 		// set Package Name
-		$check['packagename']	= $archivename;
+		$check['packagename'] = $archivename;
 		
 		// set directory
-		$check['dir']		= $config->get('tmp_path'). '/' .$archivename;
+		$check['dir'] = $config->get('tmp_path'). '/' .$archivename;
 		
 		return $check;
 	}
@@ -527,8 +571,8 @@ class MembersmanagerModelAjax extends JModelList
 	{
 		jimport('joomla.filesystem.file');
 		
-		$config		= JFactory::getConfig();
-		$package	= $config->get('tmp_path'). '/' .$package;
+		$config = JFactory::getConfig();
+		$package = $config->get('tmp_path'). '/' .$package;
 
 		// Is the package file a valid file?
 		if (is_file($package))
@@ -607,13 +651,77 @@ class MembersmanagerModelAjax extends JModelList
 	}
 
 
+	/**
+	 * get any placeholder
+	 *
+	 * @param   string  $getType    Name get type
+	 *
+	 * @return  string  The html string of placeholders
+	 *
+	 */
+	public function getAnyPlaceHolders($getType)
+	{
+		// check if we should add a header
+		if (method_exists(__CLASS__, 'getPlaceHolderHeaders') && ($string = $this->getPlaceHolderHeaders($getType)) !== false)
+		{
+			$string = JText::_($string) . ' ';
+			$header = '<h4>' . $string . '</h4>';
+		}
+		else
+		{
+			$string = '';
+			$header = '';
+		}
+		// get the core component helper class & get placeholders
+		if (($helperClass = MembersmanagerHelper::getHelperClass('membersmanager')) !== false &&  ($placeholders = $helperClass::getAnyPlaceHolders($getType)) !== false)
+		{
+			return '<div>' . $header . '<code style="display: inline-block; padding: 2px; margin: 3px;">' .
+				implode('</code> <code style="display: inline-block; padding: 2px; margin: 3px;">', $placeholders) .
+				'</code></div>';
+		}
+		// not found
+		return '<div class="alert alert-error"><h4 class="alert-heading">' .
+			$string . JText::_('COM_MEMBERSMANAGER_PLACEHOLDERS_NOT_FOUND') .
+			'!</h4><div class="alert-message">' .
+			JText::_('COM_MEMBERSMANAGER_THERE_WAS_AN_ERROR_PLEASE_TRY_AGAIN_LATER_IF_THIS_ERROR_CONTINUES_CONTACT_YOUR_SYSTEM_ADMINISTRATOR') .
+			'</div></div>';
+	}
+
+
+	/**
+	 * get the placeholder
+	 *
+	 * @param   string  $getType    Name get type
+	 *
+	 * @return  string  The html string of placeholders
+	 *
+	 */
 	public function getPlaceHolders($getType)
 	{
+		// check if we should add a header
+		if (method_exists(__CLASS__, 'getPlaceHolderHeaders') && ($string = $this->getPlaceHolderHeaders($getType)) !== false)
+		{
+			$string = JText::_($string) . ' ';
+			$header = '<h4>' . $string . '</h4>';
+		}
+		else
+		{
+			$string = '';
+			$header = '';
+		}
+		// get placeholders
 		if ($placeholders = MembersmanagerHelper::getPlaceHolders($getType))
 		{
-			return '<code style="display: inline-block; padding: 2px; margin: 3px;">'. implode('</code> <code style="display: inline-block; padding: 2px; margin: 3px;">', $placeholders).'</code>';
+			return '<div>' . $header . '<code style="display: inline-block; padding: 2px; margin: 3px;">' .
+				implode('</code> <code style="display: inline-block; padding: 2px; margin: 3px;">', $placeholders) .
+				'</code></div>';
 		}
-		return JText::_('COM_MEMBERSMANAGER_NO_PLACEHOLDERS_WERE_FOUND_PLEASE_TRY_AGAIN_LATER');
+		// not found
+		return '<div class="alert alert-error"><h4 class="alert-heading">' .
+			$string . JText::_('COM_MEMBERSMANAGER_PLACEHOLDERS_NOT_FOUND') .
+			'!</h4><div class="alert-message">' .
+			JText::_('COM_MEMBERSMANAGER_THERE_WAS_AN_ERROR_PLEASE_TRY_AGAIN_LATER_IF_THIS_ERROR_CONTINUES_CONTACT_YOUR_SYSTEM_ADMINISTRATOR') .
+			'</div></div>';
 	}
 
 
@@ -649,31 +757,98 @@ class MembersmanagerModelAjax extends JModelList
 	protected function getMembers($search, $user)
 	{
 		// get members from DB
-		$members = $this->searching($search, $user);
+		$this->searching($search, $user, $members, 1);
 		// make sure we have members
 		if (MembersmanagerHelper::checkArray($members))
 		{
+			// only sort if not email search
+			if (strpos($search, '@') === false)
+			{
+				// little sorter based on name
+				usort($members, function ($a, $b) use($search) {
+					// first check if this is a name with space (basically hen name and surname is in one field = name)
+					$length = strlen($search);
+					$evalue = substr($a->name, 0, $length) == $search;
+					$fvalue = substr($b->name, 0, $length) == $search;
+					// if not found
+					if (!$evalue && !$fvalue)
+					{
+						// best break up the string and search for each word
+						$searchArray = (array) preg_split('/\s+/', $search);
+						$name = array_shift($searchArray);
+						$length = strlen($name);
+						$avalue = substr($a->name, 0, $length) == $name;
+						$bvalue = substr($b->name, 0, $length) == $name;
+						// if the name is the same, use the surname (works only if second string is surname)
+						if ($avalue == $bvalue)
+						{
+							if (MembersmanagerHelper::checkArray($searchArray))
+							{
+								// make sure we have surnames
+								if (MembersmanagerHelper::checkString($a->surname) && MembersmanagerHelper::checkString($b->surname) )
+								{
+									$surname = implode(' ', $searchArray);
+									$length = strlen($surname);
+									$cvalue = substr($a->surname, 0, $length) == $surname;
+									$dvalue = substr($b->surname, 0, $length) == $surname;
+									// if the surname is the same
+									if ($cvalue == $dvalue) return strcmp($a->surname, $b->surname);
+									/*else*/ 
+									if ($cvalue) return -1;
+									if ($dvalue) return 1;
+								}
+								// try for longer name
+								else
+								{
+									$name = implode(' ', $searchArray);
+									$length = strlen($name);
+									$cvalue = substr($a->name, 0, $length) == $name;
+									$dvalue = substr($b->name, 0, $length) == $name;
+									// if the surname is the same
+									if ($cvalue == $dvalue) return strcmp($a->name, $b->name);
+									/*else*/ 
+									if ($cvalue) return -1;
+									if ($dvalue) return 1;
+								}
+							}
+							return strcmp($a->name, $b->name);
+						}
+						/*else*/ 
+						if ($avalue) return -1;
+						if ($bvalue) return 1;
+					}
+					else
+					{
+						/*else*/ 
+						if ($evalue) return -1;
+						if ($fvalue) return 1;
+					}
+				});
+			}
 			return (array) array_map( function ($member){
 				// build the details
 				$slug = (isset($member->token)) ? $member->id . ':' . $member->token : $member->id;
-				$profile_link = JRoute::_(membersmanagerHelperRoute::getProfileRoute($slug));
-				$name = (isset($member->user_name) && membersmanagerHelper::checkString($member->user_name)) ? $member->user_name : $member->name;
-				$email = (isset($member->user_email) && membersmanagerHelper::checkString($member->user_email)) ? $member->user_email : $member->email;
+				$profile_uri = MembersmanagerHelperRoute::getProfileRoute($slug);
+				$profile_link = JRoute::_($profile_uri);
+				$name = (isset($member->user_name) && MembersmanagerHelper::checkString($member->user_name)) ? $member->user_name : $member->name;
+				$surname = (isset($member->surname) && MembersmanagerHelper::checkString($member->surname)) ? ' ' . $member->surname : '';
+				$email = (isset($member->user_email) && MembersmanagerHelper::checkString($member->user_email)) ? $member->user_email : $member->email;
 				// build the link to the member
-				return '<a href="' . $profile_link . '" title="' . JText::_('COM_MEMBERSMANAGER_OPEN') . ' ' . $name . '" >' . $name . ' ' . $email . ' (' . $member->token . ')</a>';
+				return '<a href="' . $profile_link . '" title="' . JText::_('COM_MEMBERSMANAGER_OPEN') . ' ' . $name . $surname . ' ' . JText::_('COM_MEMBERSMANAGER_PROFILE') . '" >' . $name . $surname . ' ' . $email . ' (' . $member->token . ')</a> ' . 
+					MembersmanagerHelper::getEditButton($member, 'member', 'members', '&return=' . urlencode(base64_encode($profile_uri)), 'com_membersmanager', null);
 			}, $members);
 		}
 		return false;
 	}
 
-	protected function searching($search, $user)
+	protected function searching($search, $user, &$members, $action)
 	{
 		// Create a new query object.
 		$db = JFactory::getDBO();
 		$query = $db->getQuery(true);
 
 		// Select some fields
-		$query->select($db->quoteName(array('a.id','a.name','a.email','a.token'),array('id','name','email','token')));
+		$query->select($db->quoteName(array('a.id','a.name','a.email','a.token','a.type','a.surname'),array('id','name','email','token','type','surname')));
 
 		// From the membersmanager_item table
 		$query->from($db->quoteName('#__membersmanager_member', 'a'));
@@ -683,19 +858,8 @@ class MembersmanagerModelAjax extends JModelList
 		$query->join('LEFT', $db->quoteName('#__users', 'g') . ' ON (' . $db->quoteName('a.user') . ' = ' . $db->quoteName('g.id') . ')');
 
 		// Filter by published state always (for now)
-		$query->where('(a.published = 1)');
+		$query->where('a.published = 1');
 
-		// get types
-		$type_access = MembersmanagerHelper::getAccess($user);
-		// filter to only these groups
-		if (MembersmanagerHelper::checkArray($type_access))
-		{
-			$query->where('a.type IN (' . implode(',', $type_access) . ')');
-		}
-		else
-		{
-			return false;
-		}
 		// Implement View Level Access
 		if (!$user->authorise('core.options', 'com_membersmanager'))
 		{
@@ -704,6 +868,16 @@ class MembersmanagerModelAjax extends JModelList
 			$groups = implode(',', $user->getAuthorisedViewLevels());
 			$query->where('a.access IN (' . $groups . ')');
 		}
+		// if we aready have members, stop them from being queried again
+		if (MembersmanagerHelper::checkArray($members))
+		{
+			$ids = (array) array_map( function ($member){
+				// return idies
+				return $member->id;
+			}, $members);
+			// remove the members already loaded
+			$query->where('a.id NOT IN (' . implode(',', $ids) . ')');
+		}
 		// check if they are searching for an id
 		if (stripos($search, 'id:') === 0)
 		{
@@ -711,37 +885,268 @@ class MembersmanagerModelAjax extends JModelList
 		}
 		else
 		{
-			$search = $db->quote('%' . $db->escape($search) . '%');
-			$query->where(
-				'(g.name LIKE '.$search. // user name
-				' OR g.username LIKE '.$search. // user username
-				' OR g.email LIKE '.$search. // user email
-
-				' OR a.email LIKE '.$search.
-				' OR a.token LIKE '.$search.
-				')');
+			// best break up the string and search for each word
+			$searchArray = (array) preg_split('/\s+/', $search);
+			// start search bucket
+			$searchBucket = array();
+			// try to get it only
+			if (1 == $action)
+			{
+				if (strpos($search, '@') !== false)
+				{
+					foreach ($searchArray as $i => $searchString)
+					{
+						$searchReady = $db->quote('%' . $db->escape($searchString) . '%');
+						// only if string hints to be an email
+						if (strpos($searchString, '@') !== false)
+						{
+							$searchBucket[] = 'g.email LIKE ' . $searchReady;
+							$searchBucket[] = 'a.email LIKE ' . $searchReady;
+							// remove from array since it was an email
+							unset($searchArray[$i]);
+							break;
+						}
+					}
+				}
+				// not email with more then one word
+				if (count($searchArray) >= 2)
+				{
+					// get the name
+					$searchBucket[] = 'a.name LIKE ' . $db->quote('%' . $db->escape(array_shift($searchArray)) . '%');
+					$searchBucket[] = 'a.surname LIKE ' . $db->quote('%' . $db->escape( implode(' ', $searchArray) ) . '%');
+				}
+				// one word, so 
+				else
+				{
+					$searchReady = $db->quote('%' . $db->escape($search) . '%');
+					$searchBucket[] = 'a.name LIKE ' . $searchReady;
+					$searchBucket[] = 'a.surname LIKE ' . $searchReady;
+				}
+			}
+			elseif (2 == $action)
+			{
+				if (strpos($search, '@') !== false)
+				{
+					foreach ($searchArray as $i => $searchString)
+					{
+						// only if string hints to be an email
+						if (strpos($searchString, '@') !== false)
+						{
+							// remove from array since it was an email
+							unset($searchArray[$i]);
+							break;
+						}
+					}
+				}
+				// not email with more then one word
+				if (count($searchArray) >= 2)
+				{
+					// get the name
+					$searchBucket[] = 'g.name LIKE ' . $db->quote('%' . $db->escape(array_shift($searchArray)) . '%');
+					$searchBucket[] = 'a.surname LIKE ' . $db->quote('%' . $db->escape( implode(' ', $searchArray) ) . '%');
+				}
+				// one word, so 
+				else
+				{
+					$searchReady = $db->quote('%' . $db->escape($search) . '%');
+					$searchBucket[] = 'g.name LIKE ' . $searchReady;
+					$searchBucket[] = 'a.surname LIKE ' . $searchReady;
+				}
+			}
+			elseif (3 == $action)
+			{
+				if (strpos($search, '@') !== false)
+				{
+					foreach ($searchArray as $i => $searchString)
+					{
+						// only if string hints to be an email
+						if (strpos($searchString, '@') !== false)
+						{
+							// remove from array since it was an email
+							unset($searchArray[$i]);
+							break;
+						}
+					}
+				}
+				// not email with more then one word
+				if (count($searchArray) >= 2)
+				{
+					// get by token
+					$searchBucket[] = 'a.token LIKE ' . $db->quote('%' . $db->escape( implode(' ', $searchArray) ) . '%');
+				}
+				// one word, so 
+				else
+				{
+					$searchReady = $db->quote('%' . $db->escape($search) . '%');
+					$searchBucket[] = 'a.token LIKE ' . $searchReady;
+				}
+			}
+			else
+			{
+				if (count($searchArray) > 1)
+				{
+					foreach ($searchArray as $i => $searchString)
+					{
+						$searchReady = $db->quote('%' . $db->escape($searchString) . '%');
+						// only if string hints to be an email
+						if (strpos($searchString, '@') !== false)
+						{
+							$searchBucket[] = 'g.email LIKE ' . $searchReady;
+							$searchBucket[] = 'a.email LIKE ' . $searchReady;
+							// remove from array since it was an email
+							unset($searchArray[$i]);
+						}
+						// only if string is longer then 3 characters
+						elseif (strlen($searchString) > 3)
+						{
+							$searchBucket[] = 'a.name LIKE ' . $searchReady;
+							$searchBucket[] = 'a.token LIKE ' . $searchReady;
+							$searchBucket[] = 'a.surname LIKE ' . $searchReady;
+							$searchBucket[] = 'g.name LIKE ' . $searchReady;
+							// if this is the first string in array then remove since it is probably the name
+							if ($i == 0)
+							{
+								unset($searchArray[$i]);
+							}
+						}
+					}
+					// load to surname as a whole
+					if (MembersmanagerHelper::checkArray($searchArray))
+					{
+						$searchBucket[] = 'a.surname LIKE ' . $db->quote('%' . $db->escape( implode(' ', $searchArray) ) . '%');
+					}
+				}
+				else
+				{
+					// the basic search
+					$searchString = $db->quote('%' . $db->escape($search) . '%');
+					$searchBucket[] = 'g.name LIKE ' . $searchString;
+					$searchBucket[] = 'g.username LIKE ' . $searchString;
+					// only if string hints to be an email
+					if (strpos($searchString, '@') !== false)
+					{
+						$searchBucket[] = 'g.email LIKE ' . $searchString;
+						$searchBucket[] = 'a.email LIKE ' . $searchString;
+					}
+					$searchBucket[] = 'a.name LIKE ' . $searchString;
+					$searchBucket[] = 'a.surname LIKE ' . $searchString;
+					$searchBucket[] = 'a.token LIKE ' . $searchString;
+				}
+			}
+			// load the search bucket
+			$query->where('('. implode(' OR ', $searchBucket) . ')');
 		}
-		$query->order('a.token DESC');
-		// set query
+		// set query (to only get last 10)
 		$db->setQuery($query, 0, 10);
-		return $db->loadObjectList();
+		// get the members
+		$_members = $db->loadObjectList();
+		// did we get any
+		if (MembersmanagerHelper::checkArray($_members) && ($_members = $this->permissionFilter($_members, $user)) !== false)
+		{
+			// merger the data
+			$members = MembersmanagerHelper::mergeArrays(array($_members, $members));
+			// if we have 8 or more we return
+			if (count($members) >= 18)
+			{
+				return true;
+			}
+		}
+		// increment
+		$action++;
+		// try again
+		if ($action <= 4 )
+		{
+			$this->searching($search, $user, $members, $action);
+		}
+		return false;
 	}
+
+	protected function permissionFilter($members, &$user)
+	{
+		// if system admin, return all found
+		if ($user->authorise('core.options', 'com_membersmanager'))
+		{
+			return $members;
+		}
+		// filter by access type
+		$type_access = MembersmanagerHelper::getAccess($user);
+		// filter to only these access types
+		if (MembersmanagerHelper::checkArray($type_access))
+		{
+			// our little function to check if two arrays intersect on values
+			$intersect = function ($a, $b) { $b = array_flip($b); foreach ($a as $v) { if (isset($b[$v])) return true; } return false; };
+			// the new bucket
+			$member_bucket = array();
+			foreach ($members as $member)
+			{
+				// convert type json to array
+				if (MembersmanagerHelper::checkJson($member->type))
+				{
+					$member->type = json_decode($member->type, true);
+				}
+				// convert type int to array
+				if (is_numeric($member->type) && $member->type > 0)
+				{
+					$member->type = array($member->type);
+				}
+				// now check intersection
+				if (MembersmanagerHelper::checkArray($member->type) && $intersect($member->type, $type_access))
+				{
+					$member_bucket[] = $member;
+				}
+			}
+			// did we get any
+			if (MembersmanagerHelper::checkArray($member_bucket))
+			{
+				return $member_bucket;
+			}
+		}
+		return false;
+	}
+
 
 	// Used in profile
 	public function getReport($key)
 	{
-		// unlock the request
-		if (($check = MembersmanagerHelper::unlock($key)) !== false &&
-			MembersmanagerHelper::checkArray($check) &&
-			isset($check['id']) && $check['id'] > 0 &&
-			isset($check['element']) && MembersmanagerHelper::checkString($check['element']) &&
-			isset($check['type']) && $check['type'] > 0 &&
-			isset($check['account']) && $check['account'] > 0)
+		// first we check if this is an allowed query
+		$view = $this->getViewID();
+		if (isset($view['a_view']) && 'profile' === $view['a_view'])
 		{
-			// now check if this component is active to this member
-			if (($html = MembersmanagerHelper::getReport($check['id'], $check['element'])) !== false && MembersmanagerHelper::checkString($html))
+			// unlock the request
+			if (($check = MembersmanagerHelper::unlock($key)) !== false &&
+				MembersmanagerHelper::checkArray($check) &&
+				isset($check['id']) && $check['id'] > 0 &&
+				isset($check['element']) && MembersmanagerHelper::checkString($check['element']) &&
+				isset($check['type']) && $check['type'] > 0 &&
+				isset($check['account']) && $check['account'] > 0)
 			{
-				return array('html' => $html);
+				// now check if this component is active to this member
+				if (($html = MembersmanagerHelper::getReport($check['id'], $check['element'])) !== false && MembersmanagerHelper::checkString($html))
+				{
+					return array('html' => $html);
+				}
+			}
+		}
+		return false;
+	}
+
+	public function getListMessages($key)
+	{
+		// first we check if this is an allowed query
+		$view = $this->getViewID();
+		if (isset($view['a_view']) && 'profile' === $view['a_view'])
+		{
+			// unlock the request
+			if (($check = MembersmanagerHelper::unlock($key)) !== false &&
+				MembersmanagerHelper::checkArray($check) &&
+				isset($check['id']) && $check['id'] > 0 &&
+				isset($check['return']) && MembersmanagerHelper::checkString($check['return']))
+			{
+				// now check if this component is active to this member
+				if (($html = MembersmanagerHelper::communicate('list_messages', $check['id'], $check['return'])) !== false && MembersmanagerHelper::checkString($html))
+				{
+					return array('html' => $html);
+				}
 			}
 		}
 		return false;

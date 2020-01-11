@@ -2,12 +2,13 @@
 /**
  * @package    Joomla.Members.Manager
  *
- * @created    6th September, 2015
+ * @created    6th July, 2018
  * @author     Llewellyn van der Merwe <https://www.joomlacomponentbuilder.com/>
  * @github     Joomla Members Manager <https://github.com/vdm-io/Joomla-Members-Manager>
  * @copyright  Copyright (C) 2015. All Rights Reserved
  * @license    GNU/GPL Version 2 or later - http://www.gnu.org/licenses/gpl-2.0.html
  */
+
 
 // No direct access to this file
 defined('_JEXEC') or die('Restricted access');
@@ -68,11 +69,11 @@ class MembersmanagerRouter extends JComponentRouterBase
 			return $segments;
 		}
 
-		if (isset($view) && isset($query['id']) && ($view === 'member' || $view === 'cpanel' || $view === 'profile'))
+		if (isset($view) && isset($query['id']) && ($view === 'member' || $view === 'members' || $view === 'cpanel' || $view === 'profile'))
 		{
 			if ($mId != (int) $query['id'] || $mView != $view)
 			{
-				if (($view === 'member' || $view === 'cpanel' || $view === 'profile'))
+				if (($view === 'member' || $view === 'members' || $view === 'cpanel' || $view === 'profile'))
 				{
 					$segments[] = $view;
 					$id = explode(':', $query['id']);
@@ -122,6 +123,21 @@ class MembersmanagerRouter extends JComponentRouterBase
 				if (is_numeric($segments[$count-1]))
 				{
 					$vars['id'] = (int) $segments[$count-1];
+				}
+				break;
+			case 'members':
+				$vars['view'] = 'members';
+				if (is_numeric($segments[$count-1]))
+				{
+					$vars['id'] = (int) $segments[$count-1];
+				}
+				elseif ($segments[$count-1])
+				{
+					$id = $this->getVar('member', $segments[$count-1], 'alias', 'id');
+					if($id)
+					{
+						$vars['id'] = $id;
+					}
 				}
 				break;
 			case 'cpanel':
@@ -176,6 +192,8 @@ class MembersmanagerRouter extends JComponentRouterBase
 		{
 			$getTable = '#__categories';
 			$query->from($db->quoteName($getTable));
+			// we need this to target the components categories (TODO will keep an eye on this)
+			$query->where($db->quoteName('extension') . ' LIKE '. $db->quote((string)'com_' . $main . '%'));
 		}
 		else
 		{

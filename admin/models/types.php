@@ -2,12 +2,13 @@
 /**
  * @package    Joomla.Members.Manager
  *
- * @created    6th September, 2015
+ * @created    6th July, 2018
  * @author     Llewellyn van der Merwe <https://www.joomlacomponentbuilder.com/>
  * @github     Joomla Members Manager <https://github.com/vdm-io/Joomla-Members-Manager>
  * @copyright  Copyright (C) 2015. All Rights Reserved
  * @license    GNU/GPL Version 2 or later - http://www.gnu.org/licenses/gpl-2.0.html
  */
+
 
 // No direct access to this file
 defined('_JEXEC') or die('Restricted access');
@@ -27,12 +28,59 @@ class MembersmanagerModelTypes extends JModelList
 				'a.ordering','ordering',
 				'a.created_by','created_by',
 				'a.modified_by','modified_by',
-				'a.name','name'
+				'a.name','name',
+				'a.add_relationship','add_relationship'
 			);
 		}
 
 		parent::__construct($config);
 	}
+
+	/**
+	 * update/sync all the member types
+	 *
+	 * @return  bool true on success
+	 */
+	public function updateTypes()
+	{
+		if (($members = $this->getMembers()) !== false)
+		{
+			// set so defaults
+			$bucket = array();
+			$trigger = false;
+			foreach ($members as $id => $types)
+			{
+				MembersmanagerHelper::updateTypes($id, $types);
+			}
+			return true;
+		}
+		JFactory::getApplication()->enqueueMessage(JText::_('COM_MEMBERSMANAGER_NO_MEMBERS_ARE_SET_PLEASE_SET_SOME_AND_TRY_AGAIN'), 'warning');
+		return false;
+	}
+
+	/**
+	* Gets an array of members.
+	 *
+	 * @return  array  An array of members.
+	 *
+	 */
+	protected function getMembers()
+	{
+		// get types that allow relationships
+		$query = $this->_db->getQuery(true);
+		$query->select(array('a.id', 'a.type'));
+		$query->from('#__membersmanager_member AS a');
+		$query->where($this->_db->quoteName('a.published') . ' >= 1');
+		$this->_db->setQuery($query);
+		$this->_db->execute();
+		// only continue if we have member types and all relationship types
+		if (($members = $this->_db->loadAssocList('id', 'type')) !== false && MembersmanagerHelper::checkArray($members))
+		{
+			return $members;
+		}
+		return false;
+	}
+
 	
 	/**
 	 * Method to auto-populate the model state.
@@ -50,6 +98,9 @@ class MembersmanagerModelTypes extends JModelList
 		}
 		$name = $this->getUserStateFromRequest($this->context . '.filter.name', 'filter_name');
 		$this->setState('filter.name', $name);
+
+		$add_relationship = $this->getUserStateFromRequest($this->context . '.filter.add_relationship', 'filter_add_relationship');
+		$this->setState('filter.add_relationship', $add_relationship);
         
 		$sorting = $this->getUserStateFromRequest($this->context . '.filter.sorting', 'filter_sorting', 0, 'int');
 		$this->setState('filter.sorting', $sorting);
@@ -140,9 +191,43 @@ class MembersmanagerModelTypes extends JModelList
 				}
 			}
 		}
+
+		// set selection value to a translatable value
+		if (MembersmanagerHelper::checkArray($items))
+		{
+			foreach ($items as $nr => &$item)
+			{
+				// convert add_relationship
+				$item->add_relationship = $this->selectionTranslation($item->add_relationship, 'add_relationship');
+			}
+		}
+
         
 		// return items
 		return $items;
+	}
+
+	/**
+	 * Method to convert selection values to translatable string.
+	 *
+	 * @return translatable string
+	 */
+	public function selectionTranslation($value,$name)
+	{
+		// Array of add_relationship language strings
+		if ($name === 'add_relationship')
+		{
+			$add_relationshipArray = array(
+				1 => 'COM_MEMBERSMANAGER_TYPE_YES',
+				0 => 'COM_MEMBERSMANAGER_TYPE_NO'
+			);
+			// Now check if value is found in this array
+			if (isset($add_relationshipArray[$value]) && MembersmanagerHelper::checkString($add_relationshipArray[$value]))
+			{
+				return $add_relationshipArray[$value];
+			}
+		}
+		return $value;
 	}
 	
 	/**
@@ -204,6 +289,11 @@ class MembersmanagerModelTypes extends JModelList
 			}
 		}
 
+		// Filter by Add_relationship.
+		if ($add_relationship = $this->getState('filter.add_relationship'))
+		{
+			$query->where('a.add_relationship = ' . $db->quote($db->escape($add_relationship)));
+		}
 
 		// Add the list ordering clause.
 		$orderCol = $this->state->get('list.ordering', 'a.id');
@@ -330,6 +420,7 @@ class MembersmanagerModelTypes extends JModelList
 		$id .= ':' . $this->getState('filter.created_by');
 		$id .= ':' . $this->getState('filter.modified_by');
 		$id .= ':' . $this->getState('filter.name');
+		$id .= ':' . $this->getState('filter.add_relationship');
 
 		return parent::getStoreId($id);
 	}

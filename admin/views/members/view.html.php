@@ -2,12 +2,13 @@
 /**
  * @package    Joomla.Members.Manager
  *
- * @created    6th September, 2015
+ * @created    6th July, 2018
  * @author     Llewellyn van der Merwe <https://www.joomlacomponentbuilder.com/>
  * @github     Joomla Members Manager <https://github.com/vdm-io/Joomla-Members-Manager>
  * @copyright  Copyright (C) 2015. All Rights Reserved
  * @license    GNU/GPL Version 2 or later - http://www.gnu.org/licenses/gpl-2.0.html
  */
+
 
 // No direct access to this file
 defined('_JEXEC') or die('Restricted access');
@@ -37,6 +38,8 @@ class MembersmanagerViewMembers extends JViewLegacy
 		$this->listOrder = $this->escape($this->state->get('list.ordering'));
 		$this->listDirn = $this->escape($this->state->get('list.direction'));
 		$this->saveOrder = $this->listOrder == 'ordering';
+		// set the return here value
+		$this->return_here = urlencode(base64_encode((string) JUri::getInstance()));
 		// get global action permissions
 		$this->canDo = MembersmanagerHelper::getActions('member');
 		$this->canEdit = $this->canDo->get('member.edit');
@@ -132,6 +135,11 @@ class MembersmanagerViewMembers extends JViewLegacy
 				JToolBarHelper::custom('members.exportData', 'download', '', 'COM_MEMBERSMANAGER_EXPORT_DATA', true);
 			}
 		}
+		if ($this->user->authorise('member.import_joomla_users', 'com_membersmanager'))
+		{
+			// add Import Joomla Users button.
+			JToolBarHelper::custom('members.importJoomlaUsers', 'joomla', '', 'COM_MEMBERSMANAGER_IMPORT_JOOMLA_USERS', false);
+		}
 
 		if ($this->canDo->get('core.import') && $this->canDo->get('member.import'))
 		{
@@ -186,7 +194,15 @@ class MembersmanagerViewMembers extends JViewLegacy
 
 		// Set Account Selection
 		$this->accountOptions = $this->getTheAccountSelections();
-		if ($this->accountOptions)
+		// We do some sanitation for Account filter
+		if (MembersmanagerHelper::checkArray($this->accountOptions) &&
+			isset($this->accountOptions[0]->value) &&
+			!MembersmanagerHelper::checkString($this->accountOptions[0]->value))
+		{
+			unset($this->accountOptions[0]);
+		}
+		// Only load Account filter if it has values
+		if (MembersmanagerHelper::checkArray($this->accountOptions))
 		{
 			// Account Filter
 			JHtmlSidebar::addFilter(
@@ -202,50 +218,6 @@ class MembersmanagerViewMembers extends JViewLegacy
 					'- Keep Original '.JText::_('COM_MEMBERSMANAGER_MEMBER_ACCOUNT_LABEL').' -',
 					'batch[account]',
 					JHtml::_('select.options', $this->accountOptions, 'value', 'text')
-				);
-			}
-		}
-
-		// Set Main Member User Selection
-		$this->main_memberUserOptions = JFormHelper::loadFieldType('Mainmembers')->options;
-		if ($this->main_memberUserOptions)
-		{
-			// Main Member User Filter
-			JHtmlSidebar::addFilter(
-				'- Select '.JText::_('COM_MEMBERSMANAGER_MEMBER_MAIN_MEMBER_LABEL').' -',
-				'filter_main_member',
-				JHtml::_('select.options', $this->main_memberUserOptions, 'value', 'text', $this->state->get('filter.main_member'))
-			);
-
-			if ($this->canBatch && $this->canCreate && $this->canEdit)
-			{
-				// Main Member User Batch Selection
-				JHtmlBatch_::addListSelection(
-					'- Keep Original '.JText::_('COM_MEMBERSMANAGER_MEMBER_MAIN_MEMBER_LABEL').' -',
-					'batch[main_member]',
-					JHtml::_('select.options', $this->main_memberUserOptions, 'value', 'text')
-				);
-			}
-		}
-
-		// Set Type Name Selection
-		$this->typeNameOptions = JFormHelper::loadFieldType('Types')->options;
-		if ($this->typeNameOptions)
-		{
-			// Type Name Filter
-			JHtmlSidebar::addFilter(
-				'- Select '.JText::_('COM_MEMBERSMANAGER_MEMBER_TYPE_LABEL').' -',
-				'filter_type',
-				JHtml::_('select.options', $this->typeNameOptions, 'value', 'text', $this->state->get('filter.type'))
-			);
-
-			if ($this->canBatch && $this->canCreate && $this->canEdit)
-			{
-				// Type Name Batch Selection
-				JHtmlBatch_::addListSelection(
-					'- Keep Original '.JText::_('COM_MEMBERSMANAGER_MEMBER_TYPE_LABEL').' -',
-					'batch[type]',
-					JHtml::_('select.options', $this->typeNameOptions, 'value', 'text')
 				);
 			}
 		}
